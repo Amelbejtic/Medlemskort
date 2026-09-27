@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Affaldsviden – find kontakter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* =====================================================================
+     DESIGN: Affaldsvidens visuelle sprog
+     Open Sans, store fede versaler til sidetitler, hvide kort med tynde grå
+     kanter, og tre grønne: lime (accent), mellemgrøn (kortet på forsiden)
+     og mørkegrøn (knapper/ikoner).
+     ===================================================================== */
+  :root {
+    --bg: #ffffff; --panel: #ffffff; --surface: #f3f5f5; --ink: #222a26; --muted: #5f6b68; --line: #e2e6e6;
+    --lime: #95c11f; --green: #6a9a2f; --green-dark: #0d5c2e; --link: #0d5c2e;
+    --sea: #ffffff; --land: #6a9a2f; --land-hover: #95c11f; --land-dim: #d9dfde; --land-sel: #0d5c2e; --stroke: #ffffff;
+    --tip-bg: #ffffff; --tip-ink: #222a26; --shadow: 0 6px 24px rgba(20, 40, 30, .12);
+    --avatar-ink: #3a3f3d;
+    color-scheme: light;  /* altid lyst tema, også når brugeren har mørk tilstand slået til */
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  *, *::before, *::after { box-sizing: inherit; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: "Open Sans", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    font-size: 15px; line-height: 1.55;
+  }
+  button { font-family: inherit; }
+  button:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+
+  /* ---------- Layout ---------- */
+  .app { display: grid; grid-template-columns: minmax(340px, 420px) 1fr; height: 100%; }
+  .panel { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .panel-head { padding: 28px 28px 18px; border-bottom: 1px solid var(--line); }
+  .page-title { margin: 0; font-size: 36px; line-height: 1.05; font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em; }
+  .intro { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; max-width: 42ch; }
+  .panel-body { padding: 22px 28px 36px; overflow-y: auto; flex: 1; }
+
+  .panel-body h2 { font-size: 24px; line-height: 1.2; margin: 0 0 2px; font-weight: 700; letter-spacing: -0.01em; }
+  .panel-body h3 { font-size: 13px; font-weight: 700; color: var(--muted); margin: 26px 0 8px; }
+  .meta { margin: 0; color: var(--muted); }
+  .hint { color: var(--muted); margin: 10px 0 0; font-size: 14px; max-width: 40ch; }
+
+  .back {
+    display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; margin: 0 0 14px;
+    color: var(--link); font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .back::before { content: ""; width: 7px; height: 7px; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }
+  .back:hover { text-decoration: underline; }
+  .back.clear::before { content: "×"; width: auto; height: auto; border: 0; transform: none; font-size: 18px; line-height: 1; }
+
+  /* ---------- Søgning, filtre, eksport ---------- */
+  .search { margin-top: 18px; display: grid; gap: 8px; }
+  .q-wrap { position: relative; }
+  .q-wrap svg { position: absolute; left: 13px; top: 50%; width: 17px; height: 17px; transform: translateY(-50%);
+                fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+  .search input, .search select {
+    width: 100%; font: inherit; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px;
+  }
+  .search input { padding-left: 40px; }
+  .search input::placeholder { color: var(--muted); }
+  .search select { font-size: 14px; padding: 8px 10px; cursor: pointer; }
+  .search input:focus, .search select:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--lime) 30%, transparent); }
+  .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .export-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 2px; }
+  .export {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; background: none; border: 0;
+    font-size: 14px; font-weight: 700; color: var(--link); cursor: pointer;
+  }
+  .export svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .export:hover:not(:disabled) { text-decoration: underline; }
+  .export:disabled { color: var(--muted); cursor: default; }
+  .export-msg { font-size: 13px; color: var(--muted); }
+
+  /* ---------- Lister: kommuner og organisationer ---------- */
+  .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .list button {
+    width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+    text-align: left; font-size: 15px; color: var(--ink); cursor: pointer; transition: border-color .15s;
+  }
+  .list button:hover { border-color: var(--green); }
+  .list button:hover .name { color: var(--link); }
+  .list .name { font-weight: 600; }
+  .list .n { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .list .type { display: block; color: var(--muted); font-size: 13px; font-style: italic; }
+
+  /* ---------- Personer ---------- */
+  .people { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .people li { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; transition: border-color .15s; }
+  .people li:hover, .people li:has(details[open]) { border-color: var(--green); }
+  .people summary {
+    list-style: none; cursor: pointer; padding: 10px 34px 10px 12px; position: relative;
+    display: grid; grid-template-columns: 38px 1fr; column-gap: 12px; align-items: center;
+  }
+  .people summary::-webkit-details-marker { display: none; }
+  .people summary::after {
+    content: ""; position: absolute; right: 14px; top: 50%; width: 7px; height: 7px; margin-top: -6px;
+    border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .15s;
+  }
+  .people details[open] summary::after { transform: rotate(-135deg); margin-top: -2px; }
+  .people summary:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; border-radius: 8px; }
+  .avatar {
+    width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 13px; font-weight: 600; color: var(--avatar-ink); border: 2px solid var(--panel);
+    box-shadow: 0 0 0 1px var(--line); letter-spacing: .02em;
+  }
+  .p-text { display: grid; min-width: 0; }
+  .p-name { font-weight: 600; line-height: 1.3; }
+  .people summary:hover .p-name { color: var(--link); }
+  .p-title { color: var(--muted); font-size: 13.5px; line-height: 1.35; }
+  .p-org { color: var(--muted); font-size: 13.5px; font-style: italic; line-height: 1.35; }
+  .p-details { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 0 12px 12px; padding: 10px 12px;
+               background: var(--surface); border-radius: 6px; font-size: 14px; }
+  .p-details dt { color: var(--muted); }
+  .p-details dd { margin: 0; overflow-wrap: anywhere; }
+  .p-details a { color: var(--link); font-weight: 600; }
+
+  .covers { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
+  .covers .nw { white-space: nowrap; }
+  .covers button, .inline {
+    background: none; border: 0; padding: 0; font: inherit; color: var(--link); font-weight: 600;
+    text-decoration: underline; text-underline-offset: 2px; cursor: pointer; text-align: left;
+  }
+  .scope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 10px 0 0; font-size: 14px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px; padding: 5px 8px 5px 12px; border-radius: 999px;
+    background: var(--green-dark); color: var(--panel); border: 0; font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .chip span { font-size: 16px; line-height: 1; opacity: .85; }
+  .chip:hover span { opacity: 1; }
+  .more {
+    margin-top: 10px; width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--link); font-weight: 700; cursor: pointer;
+  }
+  .more:hover { border-color: var(--green); }
+
+  /* ---------- Kortet ----------
+     Som forsidens kort: alle kommuner grønne. Når noget er valgt eller søgt,
+     bliver resten grå (.dim), så fokus kommer af, at det irrelevante træder tilbage. */
+  .map { position: relative; background: var(--sea); overflow: hidden; min-height: 0; }
+  .map svg { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+  .map svg:active { cursor: grabbing; }
+  .kommune {
+    fill: var(--land); stroke: var(--stroke); stroke-width: 1;
+    vector-effect: non-scaling-stroke; cursor: pointer; transition: fill .2s;
+  }
+  .kommune.dim { fill: var(--land-dim); }
+  .kommune:hover { fill: var(--land-hover); }
+  .kommune.sel, .kommune.preview { fill: var(--land-sel); }
+  .kommune:focus { outline: none; }
+  .kommune:focus-visible { stroke: var(--ink); stroke-width: 2.5; }
+  .inset { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; opacity: .5; }
+  .labels text {
+    fill: var(--ink); font-weight: 700; text-anchor: middle; dominant-baseline: middle;
+    pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round;
+  }
+
+  .controls { position: absolute; top: 18px; right: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .controls button {
+    min-width: 40px; height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--ink); font-weight: 700; font-size: 18px; cursor: pointer; box-shadow: var(--shadow);
+  }
+  .controls button.wide { font-size: 13px; }
+  .controls button:hover { border-color: var(--green); color: var(--link); }
+
+  .tip {
+    position: absolute; pointer-events: none; z-index: 5; max-width: 280px;
+    background: var(--tip-bg); color: var(--tip-ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 12px; box-shadow: var(--shadow);
+    font-size: 13px; line-height: 1.45; opacity: 0; transition: opacity .1s;
+  }
+  .tip.on { opacity: 1; }
+  .tip strong { display: block; font-size: 15px; }
+  .tip .tip-n { color: var(--muted); }
+  .tip .tip-orgs { margin-top: 4px; font-style: italic; color: var(--muted); }
+  .tip .tip-hit .none { color: var(--muted); font-weight: 400; }
+  .tip .tip-hit { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); font-weight: 700; color: var(--link); }
+
+  .error { padding: 24px; max-width: 60ch; }
+  .error code { background: var(--surface); padding: 2px 6px; border-radius: 4px; }
+
+  /* ---------- Mobil: kortet øverst, panelet under ---------- */
+  @media (max-width: 760px) {
+    html, body { height: auto; }
+    .app { grid-template-columns: 1fr; height: auto; }
+    .map { order: -1; height: 55vh; border-bottom: 1px solid var(--line); }
+    .panel { border-right: 0; }
+    .panel-body { overflow: visible; }
+    .panel-head { padding: 22px 20px 16px; }
+    .panel-body { padding: 18px 20px 32px; }
+    .page-title { font-size: 30px; }
+    .controls { top: 10px; right: 10px; gap: 4px; }
+    .controls button { min-width: 34px; height: 34px; font-size: 16px; padding: 0 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .kommune, .tip, .list button, .people li { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <div class="panel-head">
+      <h1 class="page-title">Medlemmer</h1>
+      <p class="intro">Find kontakter i kommuner og affaldsselskaber. Klik dig rundt på kortet, eller søg efter en person, et selskab eller et fagområde.</p>
+      <div class="search" role="search">
+        <div class="q-wrap">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4.5 4.5"/></svg>
+          <input id="q" type="search" placeholder="Begynd at skrive for at søge…" autocomplete="off" aria-label="Søg efter navn, kommune eller selskab">
+        </div>
+        <div class="filters">
+          <select id="fType" aria-label="Filtrér på organisationstype"><option value="">Alle typer</option></select>
+          <select id="fFag" aria-label="Filtrér på fagområde"><option value="">Alle fagområder</option></select>
+        </div>
+        <div class="export-row">
+          <button id="exportCsv" class="export" type="button">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0-4-4m4 4 4-4M4 16h12"/></svg>
+            <span id="exportText">Eksportér alle kontakter (CSV)</span>
+          </button>
+          <span id="exportMsg" class="export-msg" role="status"></span>
+        </div>
+      </div>
+    </div>
+    <div class="panel-body" id="panel" aria-live="polite"></div>
+  </aside>
+  <main class="map" id="map">
+    <svg id="svg" role="img" aria-label="Kort over Danmarks kommuner"></svg>
+    <div class="controls">
+      <button id="zoomIn" aria-label="Zoom ind">+</button>
+      <button id="zoomOut" aria-label="Zoom ud">−</button>
+      <button id="reset" class="wide">Hele landet</button>
+    </div>
+    <div class="tip" id="tip" role="tooltip"></div>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script>
+/* =====================================================================
+   DATA
+   Lokalt/GitHub: hentes fra data/-mappen.
+   Enkeltfil-version (til deling/WordPress): bundle-scriptet indsætter
+   window.EMBEDDED_DATA, og så springes fetch over.
+   ===================================================================== */
+async function loadData() {
+  if (window.EMBEDDED_DATA) return window.EMBEDDED_DATA;
+  const get = p => fetch(p).then(r => { if (!r.ok) throw new Error(p); return r.json(); });
+  const [members, orgs, geo] = await Promise.all([
+    get("data/members.json"), get("data/orgs.json"), get("data/kommuner.geojson"),
+  ]);
+  return { members, orgs, geo };
+}
+
+/* Bornholm flyttes op i Kattegat (som på de fleste danmarkskort), så kortet
+   ikke bliver dobbelt så bredt af havet mellem Sjælland og Bornholm. */
+const BORNHOLM = { kode: "400", dx: -2.6, dy: 2.05 };
+function shiftGeometry(geom, dx, dy) {
+  const s = c => typeof c[0] === "number" ? [c[0] + dx, c[1] + dy] : c.map(s);
+  return { ...geom, coordinates: s(geom.coordinates) };
+}
+
+const fmt = n => n === 1 ? "1 kontakt" : `${n} kontakter`;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+loadData().then(init).catch(err => {
+  console.error(err);
+  document.getElementById("panel").innerHTML = `
+    <div class="error"><h2>Data kunne ikke indlæses</h2>
+    <p class="meta">Åbner du filen direkte fra disken, blokerer browseren indlæsning af data.
+    Start en lokal server i projektmappen med <code>python -m http.server</code> og åbn
+    <code>localhost:8000</code>.</p></div>`;
+});
+
+function init({ members, orgs, geo }) {
+  /* ---------- Forberedelse: tal og opslag pr. kommune ---------- */
+  const countByOrg = d3.rollup(members, v => v.length, m => m.org);
+  const orgCount = name => countByOrg.get(name) || 0;
+  // org-navn -> medlemmer, sorteret alfabetisk på fornavn
+  const membersByOrg = d3.group(
+    members.slice().sort((a, b) => `${a.fornavn} ${a.efternavn}`.localeCompare(`${b.fornavn} ${b.efternavn}`, "da")),
+    m => m.org);
+
+  const features = geo.features.map(f => f.properties.kode === BORNHOLM.kode
+    ? { ...f, geometry: shiftGeometry(f.geometry, BORNHOLM.dx, BORNHOLM.dy) } : f);
+
+  // kode -> { navn, orgs: [organisationer der dækker kommunen], count }
+  const kommuner = new Map(features.map(f => [f.properties.kode, { navn: f.properties.navn, orgs: [], count: 0 }]));
+  for (const [name, o] of Object.entries(orgs)) {
+    for (const k of o.kommuner) {
+      const km = kommuner.get(k);
+      if (km) { km.orgs.push(name); km.count += orgCount(name); }
+    }
+  }
+  // Kommunens egen organisation først, derefter selskaber alfabetisk
+  for (const km of kommuner.values()) {
+    km.orgs.sort((a, b) => (orgs[a].type === "Kommune" ? -1 : 0) - (orgs[b].type === "Kommune" ? -1 : 0) || a.localeCompare(b, "da"));
+  }
+
+  /* ---------- SVG-opsætning ---------- */
+  const mapEl = document.getElementById("map");
+  const svg = d3.select("#svg");
+  const g = svg.append("g");
+  const inset = g.append("rect").attr("class", "inset").attr("rx", 6);
+  const land = g.append("g");
+  const labels = g.append("g").attr("class", "labels");
+  const tip = document.getElementById("tip");
+
+  const projection = d3.geoMercator();
+  const path = d3.geoPath(projection);
+  let W = 0, H = 0;
+  let focus = null; // det der aktuelt er zoomet ind på (bruges ved resize)
+  let openKommune = () => {}; // sættes, når navigationen er klar
+  let hitCounts = null;        // kode -> antal søgeresultater; null når der ikke søges
+  let exportScope = null;      // {people, label} når en søgning er aktiv, ellers null (= eksportér alt)
+  let updateExportButton = () => {};
+
+  const paths = land.selectAll("path").data(features).join("path")
+    .attr("class", "kommune")
+    .attr("tabindex", 0)
+    .attr("role", "button")
+    .attr("aria-label", d => { const km = kommuner.get(d.properties.kode); return `${km.navn}, ${fmt(km.count)}`; })
+    .on("click", (e, d) => openKommune(d.properties.kode))
+    .on("keydown", (e, d) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openKommune(d.properties.kode); } })
+    .on("pointerenter pointermove", (e, d) => showTip(e, d))
+    .on("pointerleave", hideTip);
+
+  const labelSel = labels.selectAll("text").data(features).join("text").text(d => d.properties.navn);
+
+  /* ---------- Zoom og pan ----------
+     d3.zoom lytter på træk, scroll og pinch og giver os en transform (x, y, k),
+     som vi lægger på gruppen g. Stregerne holdes tynde med vector-effect i CSS. */
+  const zoom = d3.zoom()
+    .scaleExtent([1, 40])
+    .clickDistance(4) // et lille ryk under et klik tæller stadig som klik, ikke som træk
+    .on("zoom", ({ transform }) => {
+      g.attr("transform", transform);
+      updateLabels(transform.k);
+      hideTip();
+    });
+  svg.call(zoom).on("dblclick.zoom", null);
+
+  // Manuelle label-placeringer [lon, lat] hvor midtpunktet ligger dårligt.
+  // København omslutter Frederiksberg, så dens midtpunkt lander oven i Frederiksberg.
+  const LABEL_AT = { "101": [12.585, 55.705] };
+
+  // Label-regel: en kommune får navn på, når den fylder nok på skærmen.
+  // Areal vokser med k², så små hovedstadskommuner dukker op først ved dyb zoom.
+  function updateLabels(k) {
+    labelSel
+      .attr("font-size", 12 / k)
+      .style("stroke-width", 3 / k)
+      .attr("display", d => k >= 1.8 && d._area * k * k > 2600 ? null : "none");
+  }
+
+  /* ---------- Tegn / tilpas til skærmstørrelse ---------- */
+  function layout() {
+    W = mapEl.clientWidth; H = mapEl.clientHeight;
+    svg.attr("viewBox", [0, 0, W, H]);
+    zoom.extent([[0, 0], [W, H]]).translateExtent([[-W * 0.5, -H * 0.5], [W * 1.5, H * 1.5]]);
+    const pad = Math.min(W, H) * 0.06;
+    projection.fitExtent([[pad, pad], [W - pad, H - pad]], { type: "FeatureCollection", features });
+    paths.attr("d", path);
+    labelSel.each(function (d) {
+      const [x, y] = LABEL_AT[d.properties.kode] ? projection(LABEL_AT[d.properties.kode]) : path.centroid(d);
+      d._area = path.area(d);
+      d3.select(this).attr("x", x).attr("y", y);
+    });
+    const b = path.bounds(features.find(f => f.properties.kode === BORNHOLM.kode));
+    const p = 10;
+    inset.attr("x", b[0][0] - p).attr("y", b[0][1] - p).attr("width", b[1][0] - b[0][0] + 2 * p).attr("height", b[1][1] - b[0][1] + 2 * p);
+    zoomTo(focus, false);
+  }
+  new ResizeObserver(layout).observe(mapEl);
+
+  function boundsOf(codes) {
+    const bs = features.filter(f => codes.includes(f.properties.kode)).map(f => path.bounds(f));
+    return [[d3.min(bs, b => b[0][0]), d3.min(bs, b => b[0][1])], [d3.max(bs, b => b[1][0]), d3.max(bs, b => b[1][1])]];
+  }
+
+  // Zoom så de valgte kommuner fylder ~70 % af kortet (maks. zoom 12, så små kommuner ikke bliver absurde)
+  function zoomTo(codes, animate = true) {
+    let t = d3.zoomIdentity;
+    if (codes && codes.length) {
+      const [[x0, y0], [x1, y1]] = boundsOf(codes);
+      const k = Math.min(12, 0.7 / Math.max((x1 - x0) / W, (y1 - y0) / H));
+      t = d3.zoomIdentity.translate(W / 2, H / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
+    }
+    (animate && !reducedMotion ? svg.transition().duration(750) : svg).call(zoom.transform, t);
+  }
+
+  /* ---------- Hover-boks ---------- */
+  function showTip(e, d) {
+    if (e.pointerType === "touch") return; // på touch er der ingen hover – tryk vælger i stedet
+    const km = kommuner.get(d.properties.kode);
+    tip.innerHTML = `<strong>${esc(km.navn)}</strong><span class="tip-n">${fmt(km.count)}</span>
+      <div class="tip-orgs">${km.orgs.map(esc).join(", ")}</div>
+      ${hitCounts ? `<div class="tip-hit">${hitCounts.get(d.properties.kode)
+        ? `${hitCounts.get(d.properties.kode) === 1 ? "1 resultat" : `${hitCounts.get(d.properties.kode)} resultater`} her`
+        : `<span class="none">Ingen resultater her</span>`}</div>` : ""}`;
+    const r = mapEl.getBoundingClientRect();
+    let x = e.clientX - r.left + 14, y = e.clientY - r.top + 14;
+    if (x + tip.offsetWidth > W - 8) x = e.clientX - r.left - tip.offsetWidth - 14;
+    if (y + tip.offsetHeight > H - 8) y = e.clientY - r.top - tip.offsetHeight - 14;
+    tip.style.left = x + "px"; tip.style.top = y + "px";
+    tip.classList.add("on");
+  }
+  function hideTip() { tip.classList.remove("on"); }
+
+  /* =====================================================================
+     NAVIGATION SOM EN STAK
+     Hver visning er et lille objekt: {type:"home"} | {type:"kommune", kode}
+     | {type:"org", name} | {type:"search", q, type, fag, all}.
+     go() lægger en visning ovenpå, back() fjerner den øverste, home() nulstiller.
+     Så ved tilbage-knappen altid, hvor man kom fra – uanset om det var kortet,
+     en kommune eller en søgning.
+     ===================================================================== */
+  const panel = document.getElementById("panel");
+  let stack = [{ type: "home" }];
+  const current = () => stack[stack.length - 1];
+
+  const sameView = (a, b) => a.type === b.type && a.kode === b.kode && a.name === b.name;
+  function go(view) { if (!sameView(view, current())) stack.push(view); render(); }
+  function replaceTop(view) { stack[stack.length - 1] = view; render(); }
+  function back() { if (stack.length > 1) stack.pop(); render(); }
+  function home() { stack = [{ type: "home" }]; render(); }
+
+  function backLabel(v) {
+    if (!v) return null;
+    if (v.type === "home") return "Hele landet";
+    if (v.type === "kommune") return `Tilbage til ${kommuner.get(v.kode).navn}`;
+    if (v.type === "org") return `Tilbage til ${v.name}`;
+    return "Tilbage til søgningen";
+  }
+  const backButton = () => {
+    const label = backLabel(stack[stack.length - 2]);
+    return label ? `<button class="back" data-action="back">${esc(label)}</button>` : "";
+  };
+
+  function render() {
+    const v = current();
+    setPreview([]);  // panelet skiftes ud, så en igangværende hover ville ellers hænge fast
+    syncInputs();
+    if (v.type === "home") renderHome();
+    else if (v.type === "kommune") renderKommune(v.kode);
+    else if (v.type === "org") renderOrg(v.name);
+    else renderSearch(v);
+    if (v.type !== "search") exportScope = null;
+    updateExportButton();
+    panel.scrollTop = 0;
+  }
+
+  /* Kortets logik: udgangspunktet er et helt grønt kort (som forsiden).
+     Så snart noget er valgt, fundet eller er et selskabs område, bliver
+     ALT ANDET gråt (.dim). Det valgte (.sel) står mørkegrønt. */
+  function highlight(selCodes = [], orgCodes = [], hits = null) {
+    hitCounts = hits;
+    const focusActive = selCodes.length || orgCodes.length || hits;
+    const keep = k => selCodes.includes(k) || orgCodes.includes(k) || (hits && hits.has(k));
+    paths.classed("sel", d => selCodes.includes(d.properties.kode))
+         .classed("dim", d => !!focusActive && !keep(d.properties.kode));
+  }
+
+  /* ---------- Preview: hover over et resultat lyser dets kommuner op ----------
+     Elementer i panelet får data-preview="org:<navn>" eller "k:<kode>". */
+  function previewCodes(key) {
+    if (!key) return [];
+    if (key.startsWith("k:")) return [key.slice(2)];
+    return orgs[key.slice(4)]?.kommuner || [];
+  }
+  function setPreview(codes) { paths.classed("preview", d => codes.includes(d.properties.kode)); }
+
+  /* ---------- Personer ---------- */
+  /* En kontaktværdi bliver kun et link, hvis den ligner en rigtig e-mail/telefon.
+     'xxxx'-pladsholdere vises som tekst, så demoen ikke laver døde links. */
+  function contactValue(v, kind) {
+    if (!v) return null;
+    if (kind === "email" && v.includes("@")) return `<a href="mailto:${esc(v)}">${esc(v)}</a>`;
+    if (kind === "tel" && /\d{6,}/.test(v.replace(/\s/g, ""))) return `<a href="tel:${esc(v.replace(/\s/g, ""))}">${esc(v)}</a>`;
+    return esc(v);
+  }
+
+  /* Initial-cirkler som på den nuværende medlemsside. Farven følger organisationen
+     (samme hash giver altid samme farve), så kolleger ligner hinanden i listerne. */
+  const AVATAR_COLORS = ["#c9a9c6", "#a9c79a", "#d6a3ad", "#9fb4c7", "#d1ad9a", "#b3a6c9",
+                         "#a8c3b8", "#d8c38f", "#9fc3cf", "#c7b19b", "#b9c79a", "#c4a0b8"];
+  function orgColor(name) {
+    let h = 0;
+    for (const ch of name) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+    return AVATAR_COLORS[h % AVATAR_COLORS.length];
+  }
+  function initials(m) {
+    const last = (m.efternavn || "").trim().split(/\s+/).pop() || "";
+    return ((m.fornavn || "?")[0] + (last[0] || "")).toUpperCase();
+  }
+
+  // showOrg: i søgeresultater mangler konteksten, så organisationen vises under titlen
+  function personRow(m, showOrg = false) {
+    const rows = [
+      ["Organisation", `<button class="inline" data-org="${esc(m.org)}">${esc(m.org)}</button>`],
+      ["Fagområde", m.fagomraade && esc(m.fagomraade)],
+      ["E-mail", contactValue(m.email, "email")],
+      ["Telefon", contactValue(m.telefon, "tel")],
+    ].filter(([, v]) => v);  // tomme felter udelades i stedet for at vise "–"
+    return `<li data-preview="org:${esc(m.org)}"><details>
+      <summary>
+        <span class="avatar" style="background:${orgColor(m.org)}" aria-hidden="true">${esc(initials(m))}</span>
+        <span class="p-text">
+          <span class="p-name">${esc(m.fornavn)} ${esc(m.efternavn || "")}</span>
+          ${m.titel ? `<span class="p-title">${esc(m.titel)}</span>` : ""}
+          ${showOrg ? `<span class="p-org">${esc(m.org)}</span>` : ""}
+        </span>
+      </summary>
+      <dl class="p-details">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+    </details></li>`;
+  }
+
+  function orgRow(o) {
+    return `<li data-preview="org:${esc(o)}"><button data-org="${esc(o)}">
+      <span><span class="name">${esc(o)}</span><span class="type">${esc(orgs[o].type)}</span></span>
+      <span class="n">${fmt(orgCount(o))}</span></button></li>`;
+  }
+
+  /* ---------- Visninger ---------- */
+  function renderHome() {
+    focus = null; highlight(); zoomTo(null);
+    panel.innerHTML = `
+      <h2>Hele Danmark</h2>
+      <p class="meta">${fmt(members.length)} i ${Object.keys(orgs).length} organisationer</p>
+      <h3>Sådan finder du kontakter</h3>
+      <p class="hint">Klik på en kommune på kortet for at se, hvilke kommuner og affaldsselskaber du kan kontakte der,
+      eller søg efter en person, et selskab eller et fagområde ovenfor.</p>`;
+  }
+
+  function renderKommune(kode) {
+    const km = kommuner.get(kode);
+    focus = [kode]; highlight([kode]); zoomTo(focus);
+    panel.innerHTML = `
+      ${backButton()}
+      <h2>${esc(km.navn)}</h2>
+      <p class="meta">${fmt(km.count)} i ${km.orgs.length === 1 ? "1 organisation" : `${km.orgs.length} organisationer`}</p>
+      <h3>Organisationer der dækker kommunen</h3>
+      <ul class="list">${km.orgs.map(orgRow).join("")}</ul>`;
+  }
+
+  function renderOrg(name) {
+    const o = orgs[name];
+    focus = o.kommuner.length ? o.kommuner : null;
+    highlight([], o.kommuner);
+    if (focus) zoomTo(focus);
+    // Kommuner dækker kun sig selv, så linjen giver kun mening for selskaber
+    const kList = o.kommuner.map(k => [k, kommuner.get(k)]).sort((a, b) => a[1].navn.localeCompare(b[1].navn, "da"));
+    const covers = o.type === "Kommune" ? "" : kList.length
+      ? `<p class="covers">Dækker ${kList.map(([k, km], i) => `<span class="nw"><button data-kommune="${k}">${esc(km.navn)}</button>${i < kList.length - 1 ? "," : ""}</span>`).join(" ")}</p>`
+      : `<p class="covers">Landsdækkende organisation, ikke knyttet til en bestemt kommune.</p>`;
+    const ms = membersByOrg.get(name) || [];
+    panel.innerHTML = `
+      ${backButton()}
+      <h2>${esc(name)}</h2>
+      <p class="meta">${esc(o.type)}, ${fmt(orgCount(name))}</p>
+      ${covers}
+      <h3>Kontakter</h3>
+      ${ms.length ? `<ul class="people">${ms.map(m => personRow(m)).join("")}</ul>` : `<p class="hint">Ingen kontakter registreret.</p>`}`;
+  }
+
+  /* =====================================================================
+     SØGNING
+     Tolerant over for æ/ø/å: både søgeord og tekst "foldes" på to måder, så
+     "aarhus" finder "Århus" (å→aa) og "moller" finder "Møller" (ø→o).
+     Alle ord i søgningen skal matche et sted (AND), men i hvilket felt er ligegyldigt.
+     ===================================================================== */
+  const strip = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const foldA = s => strip(s.toLowerCase().replace(/å/g, "aa").replace(/æ/g, "ae").replace(/ø/g, "oe"));
+  const foldB = s => strip(s.toLowerCase().replace(/[åæ]/g, "a").replace(/ø/g, "o"));
+  const makeIndex = (...parts) => { const s = parts.filter(Boolean).join(" "); return { a: foldA(s), b: foldB(s) }; };
+  const hit = (idx, tokens) => tokens.every(([a, b]) => idx.a.includes(a) || idx.b.includes(b));
+
+  // Indeksér én gang ved start i stedet for ved hvert tastetryk
+  const kommuneIndex = [...kommuner].map(([kode, km]) => ({ kode, navn: km.navn, idx: makeIndex(km.navn) }));
+  const orgIndex = Object.entries(orgs).map(([name, o]) => ({
+    name, type: o.type,
+    nameIdx: makeIndex(name),
+    // også de dækkede kommuner, så "roskilde" finder Argo og Fors
+    idx: makeIndex(name, ...o.kommuner.map(k => kommuner.get(k)?.navn)),
+  }));
+  const personIndex = [...membersByOrg.values()].flat().map(m => ({
+    m, type: orgs[m.org].type,
+    nameIdx: makeIndex(m.fornavn, m.efternavn),
+    idx: makeIndex(m.fornavn, m.efternavn, m.titel, m.fagomraade, m.org),
+  }));
+
+  const qInput = document.getElementById("q");
+  const fType = document.getElementById("fType");
+  const fFag = document.getElementById("fFag");
+
+  // Filtermuligheder udledes af data, så nye fagområder dukker op af sig selv
+  for (const t of [...new Set(Object.values(orgs).map(o => o.type))].sort((a, b) => a.localeCompare(b, "da")))
+    fType.add(new Option(t, t));
+  for (const f of [...new Set(members.map(m => m.fagomraade).filter(Boolean))].sort((a, b) => a.localeCompare(b, "da")))
+    fFag.add(new Option(f, f));
+
+  const readInputs = () => ({ type: "search", q: qInput.value.trim(), orgType: fType.value, fag: fFag.value });
+  const isActive = s => s.q || s.orgType || s.fag;
+
+  // Felterne viser altid den nærmeste søgning i stakken – så de passer, når man går frem og tilbage
+  function syncInputs() {
+    const s = [...stack].reverse().find(v => v.type === "search") || { q: "", orgType: "", fag: "" };
+    if (document.activeElement !== qInput) qInput.value = s.q;
+    fType.value = s.orgType; fFag.value = s.fag;
+  }
+
+  function onSearchChange() {
+    const s = readInputs();
+    // Indsnævringen til en kommune bevares, mens man skriver videre
+    if (isActive(s)) current().type === "search" ? replaceTop({ ...s, kommune: current().kommune }) : go(s);
+    else if (current().type === "search") back();
+  }
+  qInput.addEventListener("input", onSearchChange);
+  fType.addEventListener("change", onSearchChange);
+  fFag.addEventListener("change", onSearchChange);
+  qInput.addEventListener("keydown", e => {
+    if (e.key === "Escape") { e.stopPropagation(); qInput.value = ""; onSearchChange(); }
+  });
+
+  const PERSON_LIMIT = 40;
+  function renderSearch(s) {
+    /* Søgeresultater er landsdækkende, så kortet zoomer ud – men kun hvis det er
+       fokuseret på noget. Ellers ville kortet hoppe ved hvert tastetryk og
+       overskrive, hvis brugeren selv har flyttet rundt imens. */
+    if (focus) { focus = null; zoomTo(null); }
+    const tokens = s.q.split(/\s+/).filter(Boolean).map(t => [foldA(t), foldB(t)]);
+    const filtered = s.orgType || s.fag;
+    const byName = (a, b) => a.localeCompare(b, "da");
+
+    /* Filterregler:
+       - Kommuner (geografi) vises kun ved ren tekstsøgning; filtrene handler om organisationer og personer.
+       - Organisationer filtreres på type. De har ikke et fagområde, så de skjules ved fagområde-filter.
+       - Personer filtreres på både organisationens type og deres eget fagområde. */
+    const kRes = filtered || !tokens.length ? [] :
+      kommuneIndex.filter(k => hit(k.idx, tokens)).sort((a, b) => byName(a.navn, b.navn));
+    const oRes = s.fag ? [] : orgIndex
+      .filter(o => (!s.orgType || o.type === s.orgType) && hit(o.idx, tokens))
+      // navne-match før "dækker kommunen"-match, derefter alfabetisk
+      .sort((a, b) => (hit(b.nameIdx, tokens) - hit(a.nameIdx, tokens)) || byName(a.name, b.name));
+    const pRes = personIndex
+      .filter(p => (!s.orgType || p.type === s.orgType) && (!s.fag || p.m.fagomraade === s.fag) && hit(p.idx, tokens))
+      .sort((a, b) => (hit(b.nameIdx, tokens) - hit(a.nameIdx, tokens)) ||
+                      byName(`${a.m.fornavn} ${a.m.efternavn}`, `${b.m.fornavn} ${b.m.efternavn}`));
+
+    /* Kortet: hvor ligger resultaterne? En person/organisation tæller i alle de
+       kommuner, organisationen dækker. Tælles på ALLE resultater, så kortet stadig
+       viser helheden, når man har indsnævret til én kommune. */
+    const hits = new Map();
+    const add = codes => codes.forEach(k => hits.set(k, (hits.get(k) || 0) + 1));
+    kRes.forEach(k => add([k.kode]));
+    oRes.forEach(o => add(orgs[o.name].kommuner));
+    pRes.forEach(p => add(orgs[p.m.org].kommuner));
+    highlight(s.kommune ? [s.kommune] : [], [], hits);
+
+    // Indsnævring til én kommune (klik på kortet): kun det, der dækker kommunen
+    const inK = name => !s.kommune || orgs[name].kommuner.includes(s.kommune);
+    const kShow = s.kommune ? [] : kRes;
+    const oShow = oRes.filter(o => inK(o.name));
+    const pShow = pRes.filter(p => inK(p.m.org));
+
+    // Eksport følger præcis resultatlisten, inkl. kommune-afgrænsning – men uden 40-grænsen
+    exportScope = {
+      people: pShow.map(p => p.m),
+      label: [s.q, s.fag, s.orgType, s.kommune && kommuner.get(s.kommune).navn].filter(Boolean).join(" "),
+    };
+    const total = kShow.length + oShow.length + pShow.length;
+    const shown = s.all ? pShow : pShow.slice(0, PERSON_LIMIT);
+    const reset = filtered || s.q ? `<button class="back clear" data-action="clear">Ryd søgning og filtre</button>` : "";
+    const kNavn = s.kommune && kommuner.get(s.kommune).navn;
+    const scope = s.kommune
+      ? `<div class="scope"><button class="chip" data-action="unkommune" aria-label="Fjern afgrænsning til ${esc(kNavn)}">Kun ${esc(kNavn)} <span aria-hidden="true">×</span></button>
+         <button class="inline" data-kommune="${s.kommune}">Se alt i ${esc(kNavn)}</button></div>`
+      : hits.size ? `<p class="hint">Kommuner med resultater er markeret på kortet. Klik på en af dem for at se resultaterne dér.</p>` : "";
+
+    if (!total) {
+      panel.innerHTML = `${reset}${scope}
+        <h2>Ingen resultater${kNavn ? ` i ${esc(kNavn)}` : ""}</h2>
+        <p class="hint">${s.q ? `Intet matcher "${esc(s.q)}"${filtered ? " med de valgte filtre" : ""}.` : "Intet matcher de valgte filtre."}
+        Prøv et kortere ord${filtered ? ", eller fjern et filter" : ""}.</p>`;
+      return;
+    }
+    /* Overskriften nævner hver type for sig ("339 personer og 4 organisationer"),
+       så den stemmer overens med eksportknappen, der kun tæller personer. */
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+    const parts = [
+      pShow.length && plural(pShow.length, "person", "personer"),
+      oShow.length && plural(oShow.length, "organisation", "organisationer"),
+      kShow.length && plural(kShow.length, "kommune", "kommuner"),
+    ].filter(Boolean);
+    const summary = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} og ${parts.at(-1)}` : parts[0];
+    panel.innerHTML = `${reset}
+      <h2>${summary}${kNavn ? ` i ${esc(kNavn)}` : ""}</h2>
+      ${scope}
+      ${kShow.length ? `<h3>Kommuner (${kShow.length})</h3>
+        <ul class="list">${kShow.map(k => `<li data-preview="k:${k.kode}"><button data-kommune="${k.kode}"><span class="name">${esc(k.navn)}</span>
+          <span class="n">${fmt(kommuner.get(k.kode).count)}</span></button></li>`).join("")}</ul>` : ""}
+      ${oShow.length ? `<h3>Organisationer (${oShow.length})</h3>
+        <ul class="list">${oShow.map(o => orgRow(o.name)).join("")}</ul>` : ""}
+      ${pShow.length ? `<h3>Personer (${pShow.length})</h3>
+        <ul class="people">${shown.map(p => personRow(p.m, true)).join("")}</ul>
+        ${shown.length < pShow.length ? `<button class="more" data-action="all">Vis alle ${pShow.length} personer</button>` : ""}` : ""}`;
+  }
+
+  /* ---------- Hændelser ----------
+     Én lytter på panelet i stedet for en pr. knap (event delegation), fordi indholdet skiftes hele tiden. */
+  panel.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.org) go({ type: "org", name: b.dataset.org });
+    else if (b.dataset.kommune) go({ type: "kommune", kode: b.dataset.kommune });
+    else if (b.dataset.action === "back") back();
+    else if (b.dataset.action === "all") replaceTop({ ...current(), all: true });
+    else if (b.dataset.action === "unkommune") replaceTop({ ...current(), kommune: null, all: false });
+    else if (b.dataset.action === "clear") {
+      qInput.value = ""; fType.value = ""; fFag.value = "";
+      stack = stack.filter(v => v.type !== "search"); render();
+    }
+  });
+  /* Klik på kortet: under en søgning indsnævres søgningen til kommunen (klik igen
+     for at fjerne den). Ellers åbnes kommunevisningen som normalt. */
+  openKommune = kode => {
+    const v = current();
+    if (v.type === "search") replaceTop({ ...v, kommune: v.kommune === kode ? null : kode, all: false });
+    else go({ type: "kommune", kode });
+  };
+
+  // Preview kun med mus – på touch findes der ingen hover
+  panel.addEventListener("pointerover", e => {
+    if (e.pointerType !== "mouse") return;
+    setPreview(previewCodes(e.target.closest("[data-preview]")?.dataset.preview));
+  });
+  panel.addEventListener("pointerleave", () => setPreview([]));
+
+  document.getElementById("zoomIn").onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 1.6);
+  document.getElementById("zoomOut").onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 1 / 1.6);
+  document.getElementById("reset").onclick = home;
+  document.addEventListener("keydown", e => {
+    const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName);
+    if (e.key === "Escape" && !typing) home();
+    if (e.key === "/" && !typing) { e.preventDefault(); qInput.focus(); }  // genvej til søgefeltet
+  });
+
+
+  /* =====================================================================
+     CSV-EKSPORT
+     Eksporterer alle kontakter med de felter siden kender (whitelisten fra
+     build_data.py) – kodeord, brugernavne og interne noter findes slet ikke
+     i sidens data og kan derfor ikke komme med.
+     ===================================================================== */
+  // Kolonnenavne som i Excel-arket, hvor der findes et tilsvarende felt
+  const CSV_COLUMNS = [
+    ["Fornavn", m => m.fornavn],
+    ["Efternavn", m => m.efternavn],
+    ["Kommune eller forsyning", m => m.org],
+    ["Organisationstype", m => orgs[m.org].type],
+    ["Titel", m => m.titel],
+    ["Fagområde", m => m.fagomraade],
+    ["E-mail", m => m.email],
+    ["Telefon", m => m.telefon],
+    ["Dækker kommuner", m => orgs[m.org].kommuner.map(k => kommuner.get(k)?.navn).filter(Boolean).join(", ")],
+  ];
+
+  function csvCell(v) {
+    let s = v == null ? "" : String(v);
+    // Excel tolker celler, der starter med = + - @, som formler ("CSV injection") – neutralisér dem
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
+    // Citationstegn omkring felter med separator, citationstegn eller linjeskift
+    return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  const allPeople = () => [...membersByOrg.keys()].sort((a, b) => a.localeCompare(b, "da")).flatMap(o => membersByOrg.get(o));
+
+  function buildCsv(rows) {
+    const lines = [CSV_COLUMNS.map(([h]) => csvCell(h)).join(";"),
+                   ...rows.map(m => CSV_COLUMNS.map(([, f]) => csvCell(f(m))).join(";"))];
+    /* Dansk Excel: semikolon som separator (komma er decimaltegn), og BOM'en (\uFEFF)
+       i starten fortæller Excel, at filen er UTF-8 – ellers bliver æøå til volapyk. */
+    return { text: "\uFEFF" + lines.join("\r\n"), count: rows.length };
+  }
+
+  /* Download virker forskelligt afhængigt af, hvor siden kører:
+     - Som publiceret artifact på claude.ai må siden ikke selv starte downloads;
+       dér bruges platformens downloads-capability (viser en bekræftelse).
+     - På GitHub Pages/WordPress findes window.claude ikke, og så bruges en
+       almindelig Blob-download. */
+  const downloadsCap = window.claude?.use ? window.claude.use("downloads").catch(() => null) : Promise.resolve(null);
+  const exportMsg = document.getElementById("exportMsg");
+  const exportBtn = document.getElementById("exportCsv");
+  const exportText = document.getElementById("exportText");
+
+  // Knapteksten viser altid, hvad man får
+  updateExportButton = () => {
+    const n = exportScope?.people.length;
+    exportBtn.disabled = exportScope !== null && n === 0;
+    exportText.textContent = exportScope === null ? "Eksportér alle kontakter (CSV)"
+      : n === 0 ? "Ingen personer at eksportere"
+      : `Eksportér ${n === 1 ? "1 person" : `${n} personer`} (CSV)`;
+  };
+
+  // "Tekstiler Kolding" -> "tekstiler_kolding" (sikre filnavne: kun a-z, 0-9 og _)
+  const slug = t => foldB(t).replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 60);
+  const say = t => { exportMsg.textContent = t; if (t) setTimeout(() => { if (exportMsg.textContent === t) exportMsg.textContent = ""; }, 4000); };
+
+  document.getElementById("exportCsv").addEventListener("click", async () => {
+    const { text, count } = buildCsv(exportScope ? exportScope.people : allPeople());
+    const tag = exportScope?.label ? slug(exportScope.label) : "";
+    const filename = `affaldsviden_kontakter_${tag ? tag + "_" : ""}${new Date().toISOString().slice(0, 10)}.csv`;
+    if (window.claude?.use) {
+      const dl = await downloadsCap;
+      if (!dl) return say("Download er ikke tilgængelig her.");
+      try { await dl.save({ filename, data: text }); say(`${count} kontakter eksporteret`); }
+      catch (e) { if (e?.code !== "declined") say("Eksporten mislykkedes. Prøv igen."); }
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: filename });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    say(`${count} kontakter eksporteret`);
+  });
+
+  layout();
+  render();
+}
+</script>
+</body>
+</html>
